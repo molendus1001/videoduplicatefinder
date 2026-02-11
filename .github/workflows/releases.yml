@@ -1,75 +1,54 @@
 name: Build releases
 
+on:
+  workflow_dispatch: # Allows manual trigger
+  push:
+    branches: [ "master", "main" ] # Only runs on push to main branches
 
-on: [push]
-    
 jobs:
   build:
-
-    strategy:
-      matrix:
-        kind: ['linux', 'windows', 'macOS', 'macOSarm64', 'linuxarm64']
-        include:
-          - kind: linux
-            os: ubuntu-latest
-            target: linux-x64
-            name: linux-x64
-          - kind: windows
-            os: windows-latest
-            target: win-x64
-            name: win-x64
-          - kind: macOS
-            os: windows-latest
-            target: osx-x64
-            name: osx-x64
-          - kind: macOSarm64
-            os: windows-latest
-            target: osx-arm64
-            name: osx-arm64
-          - kind: linuxarm64
-            os: ubuntu-latest
-            target: linux-arm64
-            name: linux-arm64
-            
-    runs-on: ${{ matrix.os }}
+    runs-on: windows-latest
 
     steps:
     - uses: actions/checkout@v4
+
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: '9.0.x'
-    - name: Declare some variables
+
+    - name: Get Short SHA
       id: vars
       shell: bash
       run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
-    - name: Build
+
+    - name: Build and Zip
       shell: bash
       run: |
-          release_name="App-${{ matrix.target }}"
-          # Add nuget sources
-          dotnet nuget add source https://www.myget.org/F/sixlabors/api/v3/index.json
-          # Build everything
-            dotnet publish ./VDF.GUI/VDF.GUI.csproj -c Release -v q --self-contained -r "${{ matrix.target }}" -o "outputFolder"
-          # Pack files
-          if [ "${{ matrix.target }}" == "win-x64" ]; then
-            # Pack to zip for Windows
-            7z a -tzip "${release_name}.zip" "./outputFolder/*"
-          else
-            tar czvf "${release_name}.tar.gz" "outputFolder"
-          fi
-          # Delete output directory
-          rm -r "outputFolder"
+          # 1. Define the zip name
+          release_name="VideoDuplicateFinder-Windows-${{ steps.vars.outputs.sha_short }}"
           
-    - name: Publish
+          # 2. Add NuGet source (sometimes needed for image libraries)
+          dotnet nuget add source https://www.myget.org/F/sixlabors/api/v3/index.json || true
+          
+          # 3. Build the project
+          # Note: I changed VDF.GUI to VideoDuplicateFinder.Windows to match your previous working file
+          dotnet publish ./VideoDuplicateFinder.Windows/VideoDuplicateFinder.Windows.csproj -c Release -v q --self-contained -r win-x64 -o "outputFolder"
+          
+          # 4. Zip the output using 7-Zip (Pre-installed on Windows runners)
+          7z a -tzip "${release_name}.zip" "./outputFolder/*"
+          
+          # 5. Clean up the folder so we don't upload unzipped files
+          rm -r "outputFolder"
+
+    - name: Publish to Release
       uses: softprops/action-gh-release@v2
       with:
           tag_name: 3.0.x
-          files: App*
+          # This will upload any zip file starting with VideoDuplicateFinder
+          files: VideoDuplicateFinder*.zip
           body: |
-            Note: These are daily builds. Attachments are automatically created and replaced on every new commit. Regardless of what the message above says. If you experience upgrade issues you may need to delete your 'ScannedFiles.db' file in VDF folder.
-            Last build based on ${{ steps.vars.outputs.sha_short }}
+            Daily build based on commit: ${{ steps.vars.outputs.sha_short }}
+            (Download the .zip file below)
       env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-
