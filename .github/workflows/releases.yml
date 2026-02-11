@@ -3,7 +3,7 @@ name: Build releases
 on:
   workflow_dispatch: # Allows manual trigger
   push:
-    branches: [ "master", "main" ] # Only runs on push to main branches
+    branches: [ "master", "main" ]
 
 jobs:
   build:
@@ -11,6 +11,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        submodules: recursive # Important: This project uses submodules for some libraries
 
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
@@ -28,27 +30,25 @@ jobs:
           # 1. Define the zip name
           release_name="VideoDuplicateFinder-Windows-${{ steps.vars.outputs.sha_short }}"
           
-          # 2. Add NuGet source (sometimes needed for image libraries)
+          # 2. Add NuGet source (needed for SixLabors image library)
           dotnet nuget add source https://www.myget.org/F/sixlabors/api/v3/index.json || true
           
-          # 3. Build the project
-          # Note: I changed VDF.GUI to VideoDuplicateFinder.Windows to match your previous working file
-          dotnet publish ./VideoDuplicateFinder.Windows/VideoDuplicateFinder.Windows.csproj -c Release -v q --self-contained -r win-x64 -o "outputFolder"
+          # 3. Build the project (CORRECTED PATH)
+          dotnet publish ./VDF.GUI/VDF.GUI.csproj -c Release -v q --self-contained -r win-x64 -o "outputFolder"
           
-          # 4. Zip the output using 7-Zip (Pre-installed on Windows runners)
+          # 4. Zip the output
           7z a -tzip "${release_name}.zip" "./outputFolder/*"
           
-          # 5. Clean up the folder so we don't upload unzipped files
+          # 5. Clean up
           rm -r "outputFolder"
 
     - name: Publish to Release
       uses: softprops/action-gh-release@v2
       with:
-          tag_name: 3.0.x
-          # This will upload any zip file starting with VideoDuplicateFinder
+          tag_name: latest-build
           files: VideoDuplicateFinder*.zip
           body: |
             Daily build based on commit: ${{ steps.vars.outputs.sha_short }}
-            (Download the .zip file below)
+            (Download the .zip file below. You will need FFmpeg installed.)
       env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
