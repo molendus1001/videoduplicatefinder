@@ -1,17 +1,27 @@
 name: Windows 64-bit
 
-on: [pull_request]
+on:
+  workflow_dispatch: # Adds a "Run Workflow" button so you don't need a Pull Request
+  pull_request:
 
 jobs:
   build:
-
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v1
+    - uses: actions/checkout@v4 # Updated to v4
+    
     - name: Setup .NET
-      uses: actions/setup-dotnet@v1
+      uses: actions/setup-dotnet@v4 # Updated to v4 (v1 might fail with .NET 9)
       with:
         dotnet-version: '9.0.x'
+
     - name: Build with dotnet
-      run: dotnet publish -c Release -v q --self-contained -r win-x64
+      # Added "-o ./publish" to force files into a specific folder we can find easily
+      run: dotnet publish -c Release -v q --self-contained -r win-x64 -o ./publish
+
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: VideoDuplicateFinder-Windows
+        path: ./publish # This matches the folder we created in the previous step
